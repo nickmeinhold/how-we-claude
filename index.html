@@ -94,9 +94,10 @@
   .spin{transform-origin:200px 200px; animation:spin 60s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
-  /* embers at night */
-  .ember{position:absolute; bottom:-10px; width:5px; height:5px; border-radius:50%;
-    background:var(--ember); box-shadow:0 0 8px 2px rgba(255,122,69,.6); opacity:0; pointer-events:none}
+  /* embers at night — a fixed full-viewport layer, lit only while Night is on screen */
+  #emberlayer{position:fixed; inset:0; z-index:0; pointer-events:none; opacity:0; transition:opacity 1s ease}
+  .ember{position:fixed; border-radius:50%; pointer-events:none; will-change:transform,opacity;
+    filter:blur(.3px)}
 
   .redtag{display:inline-block; background:#d24a1f; color:#fff; font-size:11px; font-weight:700;
     padding:2px 9px; border-radius:4px; letter-spacing:.05em; vertical-align:middle;
@@ -119,6 +120,7 @@
 <div id="sky"></div>
 <canvas id="stars"></canvas>
 <div class="progress" id="prog"></div>
+<div id="emberlayer"></div>
 
 <header class="hero">
   <div class="sun" id="sun"></div>
@@ -396,23 +398,36 @@
   const cs=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting){const el=e.target,to=+el.dataset.to,suf=el.dataset.suf||'';let n=0;const step=Math.max(1,Math.round(to/45));const id=setInterval(()=>{n+=step;if(n>=to){n=to;clearInterval(id)}el.textContent=n.toLocaleString()+suf},22);cs.unobserve(el)}}),{threshold:.6});
   document.querySelectorAll('.stat .n[data-to]').forEach(el=>cs.observe(el));
 
-  // floating embers in the night section
-  const night=document.getElementById('night');
+  // floating embers — fixed full-viewport layer, lit only while Night is on screen
+  const night=document.getElementById('night'), layer=document.getElementById('emberlayer');
+  let nightVis=0;
+  const nightIO=new IntersectionObserver((es)=>{nightVis=es[0].intersectionRatio; layer.style.opacity=Math.min(1,nightVis*1.7);},
+    {threshold:[0,.05,.15,.3,.5,.75,1]});
+  if(night) nightIO.observe(night);
   function spawnEmber(){
-    if(!night) return;
-    const r=night.getBoundingClientRect();
-    if(r.top<innerHeight && r.bottom>0){
-      const e=document.createElement('div');e.className='ember';
-      e.style.left=(Math.random()*100)+'%';
-      const dur=4+Math.random()*4, drift=(Math.random()*60-30);
-      e.style.animation=`rise ${dur}s linear forwards`;
-      e.style.setProperty('--dx',drift+'px');
-      night.appendChild(e);
-      e.animate([{transform:'translateY(0) translateX(0)',opacity:0},{opacity:1,offset:.1},{transform:`translateY(-${r.height*0.9}px) translateX(${drift}px)`,opacity:0}],{duration:dur*1000,easing:'ease-out'});
-      setTimeout(()=>e.remove(),dur*1000);
-    }
+    if(nightVis<=0.03) return;
+    const e=document.createElement('div');e.className='ember';
+    const size=3+Math.random()*5;                       // 3–8px
+    const x=Math.random()*innerWidth;
+    const warm=Math.random();                            // gold → ember spectrum
+    const col=warm<.5?'#ffcf6b':(warm<.8?'#ff9a4d':'#ff7a45');
+    e.style.width=e.style.height=size+'px';
+    e.style.left=x+'px'; e.style.top=(innerHeight+12)+'px';
+    e.style.background=col;
+    e.style.boxShadow=`0 0 ${size*2.4}px ${size*0.7}px ${col}aa`;
+    layer.appendChild(e);
+    const dur=5200+Math.random()*4200;
+    const rise=innerHeight*(0.75+Math.random()*0.4);     // how far up it floats
+    const drift=(Math.random()*120-60);                  // lateral sway
+    const a=e.animate([
+      {transform:'translate(0,0) scale(.6)', opacity:0},
+      {opacity:.9, offset:.12},
+      {opacity:.85, offset:.7},
+      {transform:`translate(${drift}px, -${rise}px) scale(1)`, opacity:0}
+    ],{duration:dur, easing:'cubic-bezier(.4,0,.5,1)'});
+    a.onfinish=()=>e.remove();
   }
-  setInterval(spawnEmber,420);
+  setInterval(spawnEmber, 240);                          // ~25–35 alive at once
 </script>
 </body>
 </html>
