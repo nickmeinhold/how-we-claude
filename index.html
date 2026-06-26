@@ -398,28 +398,36 @@
     return {cv,ctx,get W(){return W},get H(){return H},get vis(){return vis}};
   }
 
-  // ── 1. CIRCADIAN: an ascending helix that reads as a ring ──
+  // ── 1. CIRCADIAN: a helix strand that genuinely scrolls UPWARD forever ──
   (function(){
     const o=makeCanvas('circadian',460); if(!o) return;
-    const phases=[['Dawn','wake-up','#ffcf6b'],['Morning','flow','#ffe08a'],['Midday','boss fight','#ff7a45'],['Dusk','consolidate','#b07bff'],['Night','dream','#6bd0ff']];
-    const grad=[[0,'#ffcf6b'],[.18,'#ffe6b0'],[.4,'#ff8a4d'],[.62,'#b07bff'],[.82,'#3a4a9a'],[1,'#11182e']];
-    function colAt(frac){let i=0;while(i<grad.length-2&&frac>grad[i+1][0])i++;const t=(frac-grad[i][0])/((grad[i+1][0]-grad[i][0])||1);return mix(grad[i][1],grad[i+1][1],Math.max(0,Math.min(1,t)));}
-    let spin=0,drag=false,lastX=0;const tilt=1.02;
+    const phases=[['Dawn','wake-up'],['Morning','flow'],['Midday','boss fight'],['Dusk','consolidate'],['Night','dream']];
+    const grad=[[0,'#ffcf6b'],[.2,'#ffe6b0'],[.4,'#ff8a4d'],[.6,'#b07bff'],[.8,'#3a4a9a'],[1,'#11182e']];
+    function colAt(f){f=((f%1)+1)%1;let i=0;while(i<grad.length-2&&f>grad[i+1][0])i++;const t=(f-grad[i][0])/((grad[i+1][0]-grad[i][0])||1);return mix(grad[i][1],grad[i+1][1],Math.max(0,Math.min(1,t)));}
+    let spin=0,drag=false,lastX=0,t=0;
     o.cv.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;o.cv.style.cursor='grabbing'});
     addEventListener('pointerup',()=>{drag=false;if(o.cv)o.cv.style.cursor='grab'});
-    addEventListener('pointermove',e=>{if(drag){spin+=(e.clientX-lastX)*0.01;lastX=e.clientX}});
-    function proj(a,yLift,R){const x=Math.cos(a+spin)*R,z=Math.sin(a+spin)*R,y=yLift;const y2=y*Math.cos(tilt)-z*Math.sin(tilt),z2=y*Math.sin(tilt)+z*Math.cos(tilt);const f=560,sc=f/(f+z2);return{x:o.W/2+x*sc,y:o.H*0.5+y2*sc,sc,z:z2};}
-    let t=0;
-    (function loop(){requestAnimationFrame(loop);if(!o.vis)return;t++;if(!drag)spin+=0.004;
-      const ctx=o.ctx,R=Math.min(o.W,o.H)*0.34;ctx.clearRect(0,0,o.W,o.H);
-      for(let g=-2;g<=2;g++){if(!g)continue;const alpha=0.11*(1-Math.abs(g)/3);ctx.beginPath();for(let k=0;k<=64;k++){const p=proj(k/64*2*Math.PI,g*46,R);k?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}ctx.strokeStyle=`rgba(180,160,255,${alpha})`;ctx.lineWidth=1;ctx.stroke();}
-      const cg=ctx.createRadialGradient(o.W/2,o.H*0.5,0,o.W/2,o.H*0.5,72);cg.addColorStop(0,'rgba(255,240,200,.85)');cg.addColorStop(.4,'rgba(255,160,90,.45)');cg.addColorStop(1,'rgba(255,120,60,0)');ctx.fillStyle=cg;ctx.beginPath();ctx.arc(o.W/2,o.H*0.5,72,0,7);ctx.fill();
-      const pts=[];for(let k=0;k<120;k++){const frac=k/120;pts.push({frac,p:proj(frac*2*Math.PI-Math.PI/2,0,R)});}
-      pts.sort((A,B)=>A.p.z-B.p.z);
-      for(const {p,frac} of pts){const depth=(p.sc-0.6)/0.6;ctx.globalAlpha=0.4+0.6*depth;ctx.fillStyle=colAt(frac);ctx.shadowBlur=14*p.sc;ctx.shadowColor=colAt(frac);ctx.beginPath();ctx.arc(p.x,p.y,2+3.2*p.sc,0,7);ctx.fill();}
+    addEventListener('pointermove',e=>{if(drag){spin+=(e.clientX-lastX)*0.012;lastX=e.clientX}});
+    (function loop(){requestAnimationFrame(loop);if(!o.vis)return;t++;
+      const ctx=o.ctx,W=o.W,H=o.H;ctx.clearRect(0,0,W,H);
+      const pitch=148, k=2*Math.PI/pitch, R=Math.min(W*0.32,150), cx=W/2, climb=t*0.7; // climb px/frame = the ascent
+      // faint vertical axis the coil climbs
+      const ag=ctx.createLinearGradient(0,0,0,H);ag.addColorStop(0,'rgba(180,160,255,0)');ag.addColorStop(.5,'rgba(180,160,255,.13)');ag.addColorStop(1,'rgba(180,160,255,0)');ctx.strokeStyle=ag;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+      // sample the strand top→bottom; angle grows with (y+climb) so crests travel UP as climb rises
+      const M=170, beads=[];
+      for(let i=0;i<=M;i++){const y=i/M*H; const ang=k*(y+climb)+spin; beads.push({x:cx+Math.cos(ang)*R, y, depth:Math.sin(ang), ang});}
+      ctx.beginPath();beads.forEach((b,i)=>i?ctx.lineTo(b.x,b.y):ctx.moveTo(b.x,b.y));ctx.strokeStyle='rgba(255,255,255,.09)';ctx.lineWidth=1;ctx.stroke();
+      beads.slice().sort((a,b)=>a.depth-b.depth).forEach(b=>{const d=(b.depth+1)/2,f=b.ang/(2*Math.PI);ctx.globalAlpha=0.22+0.78*d;ctx.fillStyle=colAt(f);ctx.shadowBlur=9*d;ctx.shadowColor=colAt(f);ctx.beginPath();ctx.arc(b.x,b.y,1.4+3*d,0,7);ctx.fill();});
       ctx.globalAlpha=1;ctx.shadowBlur=0;
-      const na=t*0.012-Math.PI/2;for(let i=0;i<16;i++){const p=proj(na-i*0.08,0,R);ctx.globalAlpha=(1-i/16)*0.6;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,(1-i/16)*4,0,7);ctx.fill();}ctx.globalAlpha=1;
-      phases.forEach((ph,i)=>{const p=proj(-Math.PI/2+i*2*Math.PI/5,0,R);ctx.fillStyle=ph[2];ctx.shadowBlur=18*p.sc;ctx.shadowColor=ph[2];ctx.beginPath();ctx.arc(p.x,p.y,5+4*p.sc,0,7);ctx.fill();ctx.shadowBlur=0;ctx.globalAlpha=0.45+0.55*((p.sc-0.6)/0.6);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='600 13px -apple-system,sans-serif';ctx.fillText(ph[0],p.x,p.y-16*p.sc-6);ctx.fillStyle='rgba(160,170,200,.95)';ctx.font='10px -apple-system,sans-serif';ctx.fillText(ph[1],p.x,p.y-16*p.sc+6);ctx.globalAlpha=1;});
+      // five phase beads riding the strand, wrapping as they climb
+      for(let kk=0;kk<5;kk++){const theta=kk*2*Math.PI/5; let best=null;
+        for(let n=-2;n<=8;n++){const y=(theta+2*Math.PI*n-spin)/k-climb; if(y>22&&y<H-22&&(best==null||Math.abs(y-H/2)<Math.abs(best-H/2)))best=y;}
+        if(best==null)continue; const ang=k*(best+climb)+spin, x=cx+Math.cos(ang)*R, d=(Math.sin(ang)+1)/2, f=ang/(2*Math.PI);
+        ctx.fillStyle=colAt(f);ctx.shadowBlur=16*d;ctx.shadowColor=colAt(f);ctx.beginPath();ctx.arc(x,best,4+4*d,0,7);ctx.fill();ctx.shadowBlur=0;
+        const lab=(0.3+0.7*(1-Math.abs(best-H/2)/(H/2)))*(0.4+0.6*d);ctx.globalAlpha=lab;const right=x>=cx;ctx.textAlign=right?'left':'right';const ox=right?9:-9;
+        ctx.fillStyle='#fff';ctx.font='600 12px -apple-system,sans-serif';ctx.fillText(phases[kk][0],x+ox,best-2);
+        ctx.fillStyle='rgba(170,180,210,.95)';ctx.font='10px -apple-system,sans-serif';ctx.fillText(phases[kk][1],x+ox,best+10);ctx.globalAlpha=1;}
+      ctx.fillStyle='rgba(255,207,107,.55)';ctx.font='15px sans-serif';ctx.textAlign='center';ctx.fillText('↑ ascending',cx,16);
     })();
   })();
 
